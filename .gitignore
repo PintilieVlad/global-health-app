@@ -1,0 +1,28 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets: the real connection string stays on your computer
+.env
+
+# Cached downloads (large); the empty folder itself is kept
+data/raw/*
+!data/raw/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS Finder files
+.DS_Store
+
+# Local output of setup.sh
+setup-log.txt
+versions.txt
+
+# Test cache
+.pytest_cache/
+
+# Helper scripts used only on this Mac (not part of the lab)
+setup.sh
+start.sh
