@@ -1,5 +1,6 @@
 -- Design reference for the proprietary database (Lab 1, section 1.8.2).
--- The same tables are created from Python with: python -m app.create_tables
+-- The same tables are created from Python by the Alembic migrations in alembic/versions/:
+--     python -m app.create_tables      (or: alembic upgrade head)
 
 CREATE TABLE source (
     source_id   SERIAL PRIMARY KEY,
@@ -35,6 +36,8 @@ CREATE TABLE observation (
     -- Topic change 2 (Task 1.8): WHO uncertainty interval, e.g. "18.51 [17.13-19.80]"
     value_low       NUMERIC(18, 4),
     value_high      NUMERIC(18, 4),
+    -- Lab 2, Task 2.2: IQR outlier flag (outliers are flagged, not dropped)
+    is_outlier      BOOLEAN NOT NULL DEFAULT false,
     imported_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     CONSTRAINT uq_observation UNIQUE (country_iso3, indicator_id, year, sex, residence_area)
 );

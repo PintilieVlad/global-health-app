@@ -1,14 +1,43 @@
 """SQLAlchemy models: the five tables of db/schema.sql as Python classes."""
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 
-from sqlalchemy import (BigInteger, DateTime, ForeignKey, Index, Numeric,
-                        SmallInteger, String, Text, UniqueConstraint, func)
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+    UniqueConstraint,
+    false,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class Sex(StrEnum):
+    """Sex dimension of an observation (WHO GHO codes without the SEX_ prefix)."""
+
+    BOTH = "BTSX"
+    MALE = "MLE"
+    FEMALE = "FMLE"
+
+
+class ResidenceArea(StrEnum):
+    """Area of residence (WHO GHO codes without the RESIDENCEAREATYPE_ prefix)."""
+
+    TOTAL = "TOTL"
+    URBAN = "URB"
+    RURAL = "RUR"
 
 
 class Source(Base):
@@ -45,7 +74,7 @@ class Indicator(Base):
 
 
 class Observation(Base):
-    """Fact table: one value per country, indicator, year and sex."""
+    """Fact table: one value per country, indicator, year, sex and area of residence."""
     __tablename__ = "observation"
     __table_args__ = (
         UniqueConstraint("country_iso3", "indicator_id", "year", "sex", "residence_area",
@@ -57,12 +86,16 @@ class Observation(Base):
     country_iso3: Mapped[str] = mapped_column(ForeignKey("country.iso3"))
     indicator_id: Mapped[int] = mapped_column(ForeignKey("indicator.indicator_id"))
     year: Mapped[int] = mapped_column(SmallInteger)
-    sex: Mapped[str] = mapped_column(String(10), server_default="BTSX")
+    sex: Mapped[str] = mapped_column(String(10), server_default=Sex.BOTH.value)
     # Topic changes (Task 1.8): urban/rural split of PM2.5 and WHO uncertainty intervals
-    residence_area: Mapped[str] = mapped_column(String(10), server_default="TOTL")
+    residence_area: Mapped[str] = mapped_column(String(10),
+                                                server_default=ResidenceArea.TOTAL.value)
     value: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
     value_low: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
     value_high: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
+    # Lab 2, Task 2.2: IQR outlier flag (outliers are flagged, not dropped).
+    # Added by the Alembic migration alembic/versions/0002_observation_is_outlier.py.
+    is_outlier: Mapped[bool] = mapped_column(Boolean, server_default=false())
     imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),
                                                   server_default=func.now())
 
