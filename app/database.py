@@ -2,7 +2,7 @@
 import os
 
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import sessionmaker
 
 load_dotenv()
@@ -14,6 +14,11 @@ DATABASE_URL = os.getenv(
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
+
+
+def get_engine() -> Engine:
+    """The application's engine, used by the import scripts and Alembic."""
+    return engine
 
 
 def get_db():
