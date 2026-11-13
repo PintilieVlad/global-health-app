@@ -7,6 +7,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    Enum,
     ForeignKey,
     Index,
     Numeric,
@@ -38,6 +39,17 @@ class ResidenceArea(StrEnum):
     TOTAL = "TOTL"
     URBAN = "URB"
     RURAL = "RUR"
+
+
+def _code_enum(codes: type[StrEnum]) -> Enum:
+    """Non-native enum: stored as VARCHAR(10) holding the code (e.g. "BTSX"), read back
+    as the enum member (e.g. Sex.BOTH)."""
+    return Enum(
+        codes,
+        native_enum=False,
+        length=10,
+        values_callable=lambda members: [member.value for member in members],
+    )
 
 
 class Source(Base):
@@ -86,10 +98,11 @@ class Observation(Base):
     country_iso3: Mapped[str] = mapped_column(ForeignKey("country.iso3"))
     indicator_id: Mapped[int] = mapped_column(ForeignKey("indicator.indicator_id"))
     year: Mapped[int] = mapped_column(SmallInteger)
-    sex: Mapped[str] = mapped_column(String(10), server_default=Sex.BOTH.value)
+    sex: Mapped[Sex] = mapped_column(_code_enum(Sex), server_default=Sex.BOTH.value)
     # Topic changes (Task 1.8): urban/rural split of PM2.5 and WHO uncertainty intervals
-    residence_area: Mapped[str] = mapped_column(String(10),
-                                                server_default=ResidenceArea.TOTAL.value)
+    residence_area: Mapped[ResidenceArea] = mapped_column(
+        _code_enum(ResidenceArea), server_default=ResidenceArea.TOTAL.value
+    )
     value: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
     value_low: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
     value_high: Mapped[Decimal | None] = mapped_column(Numeric(18, 4))
