@@ -79,6 +79,8 @@ def test_missing_value_is_none(repository: ObservationRepository) -> None:
         (ObservationCriteria(country_iso3="ROU", indicator_code=AIR_POLLUTION_DEATHS,
                              year_to=2016), 1),
         (ObservationCriteria(country_iso3="XXX"), 0),
+        (ObservationCriteria(sex=Sex.BOTH), 7),
+        (ObservationCriteria(sex=Sex.MALE, country_iso3="ROU"), 1),
     ],
 )
 def test_filters_apply_to_find_and_count(
@@ -101,6 +103,19 @@ def test_filters_apply_to_find_and_count(
             assert item.year >= criteria.year_from
         if criteria.year_to is not None:
             assert item.year <= criteria.year_to
+        if criteria.sex is not None:
+            assert item.sex == criteria.sex
+
+
+@pytest.mark.parametrize("sex", list(Sex))
+def test_sex_filter_returns_only_rows_of_that_sex(
+    repository: ObservationRepository, sex: Sex
+) -> None:
+    items = repository.find(ObservationCriteria(sex=sex), limit=100, offset=0)
+
+    assert items  # the seed data has rows of every sex
+    assert {item.sex for item in items} == {sex}
+    assert repository.count(ObservationCriteria(sex=sex)) == len(items)
 
 
 def test_limit_and_offset_page_through_without_gaps_or_repeats(

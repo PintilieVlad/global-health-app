@@ -40,6 +40,12 @@
         </select>
     </div>
     <div class="grid">
+        <select name="sex">
+            <option value="">All sexes</option>
+            {% for option in options.sexes %}
+            <option value="{{ option.value }}" {% if option.value == criteria.sex %}selected{% endif %}>{{ option.label }} ({{ option.value }})</option>
+            {% endfor %}
+        </select>
         <input type="number" name="year_from" placeholder="From year" value="{{ criteria.year_from if criteria.year_from is not none else '' }}">
         <input type="number" name="year_to" placeholder="To year" value="{{ criteria.year_to if criteria.year_to is not none else '' }}">
         <button type="submit">Apply filters</button>

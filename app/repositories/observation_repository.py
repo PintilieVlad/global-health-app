@@ -107,4 +107,6 @@ def _conditions(criteria: ObservationCriteria) -> list[ColumnElement[bool]]:
         conditions.append(Observation.year >= criteria.year_from)
     if criteria.year_to is not None:
         conditions.append(Observation.year <= criteria.year_to)
+    if criteria.sex is not None:
+        conditions.append(Observation.sex == criteria.sex)
     return conditions

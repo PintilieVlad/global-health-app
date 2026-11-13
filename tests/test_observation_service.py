@@ -114,4 +114,9 @@ def test_filter_options_come_from_the_repository() -> None:
         countries=(Option("ROU", "Romania"),),
         indicators=(Option("EN.ATM.PM25.MC.M3", "PM2.5 air pollution, mean annual exposure"),),
         regions=("Europe & Central Asia",),
+        sexes=(
+            Option("BTSX", "Both sexes"),
+            Option("MLE", "Male"),
+            Option("FMLE", "Female"),
+        ),
     )

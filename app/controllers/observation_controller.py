@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 
-from app.controllers.form_fields import blank_to_none, to_int_or_none
+from app.controllers.form_fields import blank_to_none, to_int_or_none, to_sex_or_none
 from app.controllers.templating import templates
 from app.dependencies import get_observation_service
 from app.domain import ObservationCriteria
@@ -20,6 +20,7 @@ def observation_criteria(
     region: str | None = None,
     year_from: str | None = None,
     year_to: str | None = None,
+    sex: str | None = None,
 ) -> ObservationCriteria:
     """The filter form's query parameters; blank or invalid fields are ignored."""
     return ObservationCriteria(
@@ -28,6 +29,7 @@ def observation_criteria(
         region=blank_to_none(region),
         year_from=to_int_or_none(year_from),
         year_to=to_int_or_none(year_to),
+        sex=to_sex_or_none(sex),
     )
 
 

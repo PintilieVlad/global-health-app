@@ -3,10 +3,15 @@
 import math
 from dataclasses import dataclass
 
-from app.domain import FilterOptions, ObservationCriteria, ObservationListItem
+from app.domain import FilterOptions, ObservationCriteria, ObservationListItem, Option
+from app.models import Sex
 from app.repositories.observation_repository import ObservationRepository
 
 DEFAULT_PAGE_SIZE = 50
+
+# The sex filter offers the three codes of the Sex enum; they are fixed, not read from
+# the database.
+SEX_LABELS = {Sex.BOTH: "Both sexes", Sex.MALE: "Male", Sex.FEMALE: "Female"}
 
 
 @dataclass(frozen=True)
@@ -61,4 +66,5 @@ class ObservationService:
             countries=self._repository.list_countries(),
             indicators=self._repository.list_indicators(),
             regions=self._repository.list_regions(),
+            sexes=tuple(Option(value=sex.value, label=SEX_LABELS[sex]) for sex in Sex),
         )

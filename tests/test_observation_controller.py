@@ -121,5 +121,21 @@ def test_pagination_keeps_the_filters(client: TestClient) -> None:
     assert "?region=Europe+%26+Central+Asia&amp;page=2" in html
 
 
+def test_sex_filter_shows_one_row_and_stays_selected(client: TestClient) -> None:
+    html = client.get("/", params={"sex": "MLE", "country": "ROU"}).text
+
+    assert "1 rows · page 1 of 1" in html
+    assert html.count("<td>Romania (ROU)</td>") == 1
+    assert "<td>MLE</td>" in html
+    assert '<option value="MLE" selected>Male (MLE)</option>' in html
+
+
+def test_unknown_sex_code_is_ignored(client: TestClient) -> None:
+    response = client.get("/", params={"sex": "XYZ"})
+
+    assert response.status_code == 200
+    assert "9 rows · page 1 of 1" in response.text
+
+
 def test_page_must_be_positive(client: TestClient) -> None:
     assert client.get("/", params={"page": 0}).status_code == 422

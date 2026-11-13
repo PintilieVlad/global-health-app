@@ -20,6 +20,7 @@ class ObservationCriteria:
     region: str | None = None
     year_from: int | None = None
     year_to: int | None = None
+    sex: Sex | None = None
 
 
 @dataclass(frozen=True)
@@ -54,3 +55,4 @@ class FilterOptions:
     countries: tuple[Option, ...]
     indicators: tuple[Option, ...]
     regions: tuple[str, ...]
+    sexes: tuple[Option, ...]
