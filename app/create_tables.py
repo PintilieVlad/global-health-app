@@ -12,7 +12,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import inspect
 
-from app.database import engine
+from app.database import get_engine
 
 ALEMBIC_INI = Path(__file__).resolve().parents[1] / "alembic.ini"
 BASELINE_REVISION = "0001"
@@ -20,7 +20,7 @@ BASELINE_REVISION = "0001"
 
 def main() -> None:
     config = Config(str(ALEMBIC_INI))
-    tables = set(inspect(engine).get_table_names())
+    tables = set(inspect(get_engine()).get_table_names())
     if "observation" in tables and "alembic_version" not in tables:
         print(f"Lab 1 tables found without an Alembic version: stamping {BASELINE_REVISION}")
         command.stamp(config, BASELINE_REVISION)

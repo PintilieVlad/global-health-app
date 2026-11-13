@@ -4,7 +4,7 @@ from logging.config import fileConfig
 from sqlalchemy import create_engine, pool
 
 from alembic import context
-from app.database import DATABASE_URL
+from app.database import get_settings
 from app.models import Base
 
 config = context.config
@@ -17,7 +17,7 @@ target_metadata = Base.metadata
 def run_migrations_offline() -> None:
     """Emit the SQL of the migrations instead of running them (alembic upgrade --sql)."""
     context.configure(
-        url=DATABASE_URL,
+        url=get_settings().database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
@@ -29,7 +29,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run the migrations against the database."""
-    connectable = create_engine(DATABASE_URL, poolclass=pool.NullPool)
+    connectable = create_engine(get_settings().database_url, poolclass=pool.NullPool)
     with connectable.connect() as connection:
         context.configure(
             connection=connection,
