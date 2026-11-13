@@ -6,59 +6,43 @@ e.g. while the GHO API is unavailable.
 
 Run from the project folder:  python -m etl.import_who
 """
-from sqlalchemy.orm import Session
-
-from app.database import get_engine
-from etl.import_common import (
+from etl.import_runner import (
     RAW_ROOT,
     IndicatorSpec,
+    SourceSpec,
     configure_logging,
-    countries_in_database,
-    exit_if_failed,
-    import_indicators,
+    import_for_loaded_countries,
+    report_and_exit_on_failure,
 )
+from etl.step_result import StepResult
 from etl.transform_who import transform_who_file
 
-RAW_DIR = RAW_ROOT / "who"
-SOURCE_NAME = "WHO GHO"
-SOURCE_URL = "https://www.who.int/data/gho"
-# first year requested from the API (download_who_indicator(code, YEAR_FROM))
-YEAR_FROM = 2000
+SOURCE = SourceSpec(
+    name="WHO GHO", url="https://www.who.int/data/gho", raw_dir=RAW_ROOT / "who"
+)
 
-INDICATORS = [
+INDICATORS = (
     IndicatorSpec(
-        "SDGPM25",
-        "Concentrations of fine particulate matter (PM2.5)",
-        "µg/m³",
-        f"SDGPM25_from{YEAR_FROM}.json",
+        code="SDGPM25",
+        remote_id="SDGPM25",
+        name="Concentrations of fine particulate matter (PM2.5)",
+        unit="µg/m³",
+        raw_filename="SDGPM25_from2000.json",
     ),
     IndicatorSpec(
-        "SDGAIRBODA",
-        "Age-standardized death rate attributed to household and ambient air pollution",
-        "per 100,000 population",
-        f"SDGAIRBODA_from{YEAR_FROM}.json",
+        code="SDGAIRBODA",
+        remote_id="SDGAIRBODA",
+        name="Age-standardized death rate attributed to household and ambient air pollution",
+        unit="per 100,000 population",
+        raw_filename="SDGAIRBODA_from2000.json",
     ),
-]
+)
 
 
-def main() -> None:
-    with Session(get_engine()) as session:
-        # The observation FK points at the country table, so that is the set
-        # that counts (not the cached World Bank file).
-        valid_iso3 = countries_in_database(session)
-        failed = import_indicators(
-            session,
-            source_name=SOURCE_NAME,
-            source_url=SOURCE_URL,
-            raw_dir=RAW_DIR,
-            indicators=INDICATORS,
-            transform=transform_who_file,
-            valid_iso3=valid_iso3,
-        )
-
-    exit_if_failed(failed)
+def import_all() -> list[StepResult]:
+    return import_for_loaded_countries(SOURCE, INDICATORS, transform_who_file)
 
 
 if __name__ == "__main__":
     configure_logging()
-    main()
+    report_and_exit_on_failure(import_all())

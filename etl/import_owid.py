@@ -5,63 +5,46 @@ by the extraction (etl/extract_owid.py).
 
 Run from the project folder:  python -m etl.import_owid
 """
-from sqlalchemy.orm import Session
-
-from app.database import get_engine
-from etl.import_common import (
+from etl.import_runner import (
     RAW_ROOT,
     IndicatorSpec,
+    SourceSpec,
     configure_logging,
-    countries_in_database,
-    exit_if_failed,
-    import_indicators,
+    import_for_loaded_countries,
+    report_and_exit_on_failure,
 )
+from etl.step_result import StepResult
 from etl.transform_owid import transform_owid_chart_file
 
-RAW_DIR = RAW_ROOT / "owid"
-SOURCE_NAME = "Our World in Data"
-SOURCE_URL = "https://ourworldindata.org"
+SOURCE = SourceSpec(
+    name="Our World in Data",
+    url="https://ourworldindata.org",
+    raw_dir=RAW_ROOT / "owid",
+)
 
-# chart slugs (download_owid_chart(slug) saves <slug>_full.csv)
-CRD_SLUG = "chronic-respiratory-diseases-death-rate-who-mdb"
-PM25_SLUG = "outdoor-air-pollution-exposure"
-SLUGS = (CRD_SLUG, PM25_SLUG)
-
-CHARTS = [
+INDICATORS = (
     IndicatorSpec(
-        "OWID_CRD_DEATH_RATE",
-        "Chronic respiratory diseases death rate, age-standardized "
+        code="OWID_CRD_DEATH_RATE",
+        remote_id="chronic-respiratory-diseases-death-rate-who-mdb",
+        name="Chronic respiratory diseases death rate, age-standardized "
         "(WHO Mortality Database)",
-        "deaths per 100,000 people",
-        f"{CRD_SLUG}_full.csv",
+        unit="deaths per 100,000 people",
+        raw_filename="chronic-respiratory-diseases-death-rate-who-mdb_full.csv",
     ),
     IndicatorSpec(
-        "OWID_PM25_EXPOSURE",
-        "Outdoor air pollution exposure, population-weighted PM2.5 (SatPM)",
-        "µg/m³",
-        f"{PM25_SLUG}_full.csv",
+        code="OWID_PM25_EXPOSURE",
+        remote_id="outdoor-air-pollution-exposure",
+        name="Outdoor air pollution exposure, population-weighted PM2.5 (SatPM)",
+        unit="µg/m³",
+        raw_filename="outdoor-air-pollution-exposure_full.csv",
     ),
-]
+)
 
 
-def main() -> None:
-    with Session(get_engine()) as session:
-        # The observation FK points at the country table, so that is the set
-        # that counts (not the cached World Bank file).
-        valid_iso3 = countries_in_database(session)
-        failed = import_indicators(
-            session,
-            source_name=SOURCE_NAME,
-            source_url=SOURCE_URL,
-            raw_dir=RAW_DIR,
-            indicators=CHARTS,
-            transform=transform_owid_chart_file,
-            valid_iso3=valid_iso3,
-        )
-
-    exit_if_failed(failed)
+def import_all() -> list[StepResult]:
+    return import_for_loaded_countries(SOURCE, INDICATORS, transform_owid_chart_file)
 
 
 if __name__ == "__main__":
     configure_logging()
-    main()
+    report_and_exit_on_failure(import_all())
