@@ -1,13 +1,16 @@
 # Global Health Data Platform
 
 A web application that imports public global health data (WHO Global Health Observatory,
-World Bank, Our World in Data) into its own PostgreSQL database and serves it through a
-FastAPI backend and a web interface.
+World Bank, Our World in Data) into its own PostgreSQL database through an ETL pipeline,
+and shows it in server-side rendered web pages (FastAPI + Jinja2). A JSON API is planned
+for a later lab.
 
-**Status:** Lab 2 – the indicator data is downloaded, cleaned and stored with an idempotent
-upsert; every import is logged and SQL checks confirm the stored data
-([results](docs/lab2_results.md)). Lab 1 set up the environment, the architecture and the
-five tables.
+**Status:** Lab 3 – the stored data is shown in a web page with filters and pagination
+that the server builds for every request, and the pipeline can be started from the
+browser. The code is organized in layers (presentation → service → data access), each
+tested in the way that suits it ([results](docs/lab3_results.md)). Lab 2 downloaded,
+cleaned and stored the data ([results](docs/lab2_results.md)); Lab 1 set up the
+environment, the architecture and the five tables.
 
 ## Topic
 
@@ -53,14 +56,31 @@ Normalized, cleaned table (country, indicator, year, sex, residence area, value)
 PostgreSQL database (own schema)  ◄── the single source of truth
         │  SQL queries
         ▼
-Backend REST API  app/main.py (FastAPI, later labs)  ◄──► analysis and ML modules (later labs)
-        │  JSON and HTML
+Web application  app/ (FastAPI)  ◄──► analysis and ML modules (later labs)
+        │  HTML built on the server for every request
         ▼
-Web interface  app/templates/ (Jinja2, later labs)
+Browser: pages rendered from app/templates/ (Jinja2)
 ```
 
-Only the import pipeline calls external sources or writes to the database; the API,
-the analysis modules and the interface only read from it.
+Only the import pipeline writes to the database. The web pages only read from it; their
+two buttons start the same pipeline (Extract, Transform & load).
+
+### Layers of the web application (Lab 3)
+
+Dependencies point one way only: presentation → service → data access. Each layer knows
+only the layer below it, and a lower layer never imports from an upper one;
+[`tests/test_architecture.py`](tests/test_architecture.py) checks this automatically.
+
+| Layer | Code | Responsibility | Never contains |
+| --- | --- | --- | --- |
+| Presentation | `app/controllers/`, `app/templates/` | parse the query string or form, call one service method, render a template | SQL, business decisions |
+| Service | `app/services/` | paging rules, filter choices, running the ETL steps | HTTP, templates |
+| Data access | `app/repositories/` | all the observation queries; returns the plain types of `app/domain.py` | business rules, HTTP, commits |
+| Model | `app/models.py`, `app/database.py` | tables as Python classes, database sessions | anything about the web |
+
+[`app/dependencies.py`](app/dependencies.py) wires the layers with FastAPI `Depends`: for
+every request, `get_db()` opens a session, the repository receives it, and the service
+receives the repository.
 
 ## Database
 
@@ -128,6 +148,13 @@ Requirements: Python 3.12–3.14, Git and PostgreSQL 16 or newer. The commands a
    ```
    Same as `alembic upgrade head`. Check with `alembic current`, which prints `0002 (head)`.
 
+7. **Import the data and start the web application** (sections below):
+   ```bash
+   uvicorn app.main:app --reload
+   ```
+   Open <http://127.0.0.1:8000>, click **Extract fresh data from sources**, then
+   **Transform & load data from local JSON/CSV files**.
+
 All the commands below are run from the project folder with the virtual environment
 active (`source .venv/bin/activate`) and PostgreSQL running.
 
@@ -180,24 +207,24 @@ python -m etl.import_who
 python -m etl.import_owid
 ```
 
-For every indicator the import transforms the saved file (`etl/transform_*.py`), cleans it (`etl/clean.py`), upserts it
-(`etl/load.py`) and writes a row to `import_log`. It prints one line per indicator, together
-with the log lines of the cleaning rules:
+The same imports run from the web page (**Transform & load**). For every indicator the
+import transforms the saved file (`etl/transform_*.py`), cleans it (`etl/clean.py`),
+upserts it (`etl/load.py`) and writes a row to `import_log`, in one transaction per
+indicator (`etl/import_runner.py`). Each indicator ends as a typed result
+(`etl/step_result.py`: `ok`, `skip` or `failed`), printed one per line together with the
+log lines of the cleaning rules:
 
 ```
-== World Bank
-countries: 217 upserted
 INFO etl.clean: dropped 1225 observation rows: not a known country (aggregate, region or missing code)
 INFO etl.clean: dropped 625 observation rows: missing or non-numeric year/value
 INFO etl.clean: flagged 197 of 4800 observation rows as IQR outliers (kept)
-EN.ATM.PM25.MC.M3      raw=  6650  clean=  4800  loaded=  4800  outliers=  197
+World Bank         EN.ATM.PM25.MC.M3      ok      raw=6650 clean=4800 loaded=4800 outliers=197
 ...
-== WHO GHO
-SDGPM25                SKIP (missing SDGPM25_from2000.json)
+WHO GHO            SDGPM25                skip    missing SDGPM25_from2000.json
 ```
 
-(from the run of 4 November 2026). `SKIP` means the raw file is missing: run the
-extraction first.
+`skip` means the raw file is missing: run the extraction first. A script exits with an
+error if any indicator `failed`.
 The imports can be run again at any time: the upsert (`INSERT ... ON CONFLICT DO UPDATE` on
 country, indicator, year, sex and residence area) updates the existing rows instead of
 creating duplicates.
@@ -230,12 +257,51 @@ psql -h localhost -U gh_user -d global_health -f db/quality_checks.sql
 
 The results of Lab 2 and their explanation are in [`docs/lab2_results.md`](docs/lab2_results.md).
 
+## Web application
+
+```bash
+uvicorn app.main:app --reload
+```
+
+The terminal shows `Application startup complete`; with `--reload`, the server restarts
+when a file is saved. Open <http://127.0.0.1:8000>:
+
+| Method and path | Controller | Page |
+| --- | --- | --- |
+| `GET /` | `show_observations()` in `app/controllers/observation_controller.py` | `observations.html`: filters, table, pagination, the two buttons |
+| `POST /actions/extract` | `extract()` in `app/controllers/etl_controller.py` | `action_result.html`, one row per downloaded file |
+| `POST /actions/load` | `transform_and_load()` in `app/controllers/etl_controller.py` | `action_result.html`, one row per imported indicator |
+
+The filters form uses `method="get"`, so the filters become part of the URL, for example
+`/?country=ROU&sex=BTSX&year_from=2010&page=2`: the page can be bookmarked, shared and
+reloaded. Blank fields, unparseable years and unknown sex codes are ignored. The two
+buttons use `method="post"`, so a link click or a crawler never starts a download; a `GET`
+to these paths answers HTTP 405. Each action runs synchronously and may take 30 to 90
+seconds. The application has no JSON API yet, so there is no `/docs` page.
+
+## Tests
+
+```bash
+python -m pytest
+```
+
+| Layer | Test file | How it is tested |
+| --- | --- | --- |
+| Service | `test_observation_service.py`, `test_etl_service.py` | unit tests with a fake repository or stub jobs: no database, no network |
+| Data access | `test_observation_repository.py` | against real PostgreSQL, in a temporary schema with seed data |
+| Presentation | `test_observation_controller.py`, `test_etl_controller.py` | requests with FastAPI's `TestClient`; the layers below replaced through `dependency_overrides` |
+| Architecture | `test_architecture.py` | the dependency rule (Task 3.4) |
+
+The database tests use `TEST_DATABASE_URL`, or `DATABASE_URL` if that is not set, but never
+touch the application data: each run creates a temporary `test_<random>` schema, rolls back
+every test and drops the schema at the end. Without a reachable database they are skipped.
+
 ## Project structure
 
 ```
 global-health-app/
 ├── .env.example          # connection string template (.env itself is not in Git)
-├── requirements.txt
+├── requirements.txt, pytest.ini
 ├── docker-compose.yml    # optional: PostgreSQL in Docker
 ├── alembic.ini, alembic/ # database migrations (0001 Lab 1 tables, 0002 is_outlier)
 ├── db/
@@ -248,13 +314,24 @@ global-health-app/
 │   ├── transform_who.py, transform_worldbank.py, transform_owid.py  # normalize
 │   ├── clean.py          # cleaning rules and the IQR outlier flag
 │   ├── load.py           # upserts and import_log
-│   ├── import_worldbank.py, import_who.py, import_owid.py          # one import per source
-│   ├── import_common.py  # the import loop shared by the three scripts
+│   ├── import_worldbank.py, import_who.py, import_owid.py  # sources and indicators, import_all()
+│   ├── import_runner.py  # the Transform & Load loop shared by the import scripts
+│   ├── step_result.py    # typed results of the ETL steps
 │   └── json_types.py, raw_files.py
-├── app/                  # database.py, models.py, create_tables.py; templates/ (later labs)
+├── app/
+│   ├── main.py           # create the app, include the routers
+│   ├── dependencies.py   # wire the layers with FastAPI Depends
+│   ├── domain.py         # plain data types passed between the layers
+│   ├── database.py       # settings, engine and sessions
+│   ├── models.py         # SQLAlchemy ORM models, Sex and ResidenceArea
+│   ├── create_tables.py  # run the migrations
+│   ├── controllers/      # presentation: routes and form parsing
+│   ├── templates/        # presentation: Jinja2 views
+│   ├── services/         # business rules
+│   └── repositories/     # data access
 ├── notebooks/lab2_exploration.ipynb   # Task 2.1
 ├── docs/
-│   ├── lab2_results.md   # Tasks 2.2–2.4
-│   └── prompts/lab2.md   # prompts sent to the AI assistant
-└── tests/                # tests (later labs)
+│   ├── lab2_results.md, lab3_results.md, img/   # task results and screenshots
+│   └── prompts/lab2.md, prompts/lab3.md         # prompts sent to the AI assistant
+└── tests/                # one test file per layer, plus the architecture test
 ```
